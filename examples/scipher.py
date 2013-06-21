@@ -2,14 +2,40 @@ import sys
 import string
 import random
 import os
-import subprocess
+from subprocess import Popen, PIPE
+
+def usage():
+    print "                                                    "
+    print "  python scipher.py enc [infile]                    "
+    print "                                                    "
+    print "    examples:                                       "
+    print "                                                    "
+    print "    encrypt (hash) a password:                      "
+    print "    $ printf 'somepassword' > pwfile;               "
+    print "    $ cat pwfile | python scipher.py enc > hashfile "
+    print "                                                    "
+    print "    decrypt (test) a password:                      "
+    print "    $ printf 'somepassword' > pwfile;               "
+    print "    $ cat pwfile | python scipher.py dec hashfile   "
+    print "                                                    "
+    print "    (if no output, then the password was correct)   "
+    print "                                                    "
+    print "    encrypt a file with a passphrase:               "
+    print "    $ printf 'somepassword' > pwfile;               "
+    print "    $ cat pwfile | python scipher.py enc photo.jpg > photo.enc"
+    print "                                                    "
+    print "    decrypt an encrypted file:                      "
+    print "    $ printf 'somepassword' > pwfile;               "
+    print "    $ cat pwfile | python scipher.py dec photo.enc > photo.jpg"
+    print "                                                    "
+    sys.exit(1)
 
 def syscmd(cmd, input=None):
-    proc = subprocess.Popen(cmd,
+    proc = Popen(cmd,
             shell=True,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+            stdin=PIPE,
+            stdout=PIPE,
+            stderr=PIPE)
     stdout, stderr = proc.communicate(input=input)
     if stdout == None:
         stdout = ""
@@ -17,44 +43,29 @@ def syscmd(cmd, input=None):
         raise Exception(stderr)
     return stdout
 
-def rand_string(size=10, chars=string.ascii_lowercase + string.ascii_uppercase + string.digits):
-    return ''.join(random.choice(chars) for x in range(size))
+def encrypt(pw, msgfile):
+    return syscmd("scipher enc "+msgfile, pw)
 
-def tmpname():
-    return '/tmp/py.' + rand_string(32)
+def decrypt(pw, msgfile):
+    return syscmd("scipher dec "+msgfile, pw)
 
-def tmpfile():
-    name = tmpname()
-    return open(name, 'w'), name
+if len(sys.argv) < 2 or (sys.argv[1] == 'dec' and len(sys.argv) < 3):
+    usage()
 
-def encode(pw, msg):
-    f, fname = tmpfile()
-    try:
-        f.write(msg)
-        f.close()
-        return syscmd("scipher enc "+fname, pw)
-    finally:
-        os.remove(fname)
+msgfile = ""
+if len(sys.argv) >= 3:
+    msgfile = sys.argv[2]
 
+if sys.stdin.isatty():
+    print "pipe a password into stdin"
+    sys.exit(2)
 
-def decode(pw, msg):
-    f, fname = tmpfile()
-    try:
-        f.write(msg)
-        f.close()
-        return syscmd("scipher dec "+fname, pw)
-    finally:
-        os.remove(fname)
-
-
+pw = sys.stdin.read()
 
 if sys.argv[1] == 'enc':
-    msg = ""
-    if not sys.stdin.isatty():
-        msg = sys.stdin.read()
-    sys.stdout.write(encode(sys.argv[2], msg))
+    sys.stdout.write(encrypt(pw, msgfile))
 elif sys.argv[1] == 'dec':
-    sys.stdout.write(decode(sys.argv[2], sys.stdin.read()))
+    sys.stdout.write(decrypt(pw, msgfile))
 else:
-    print "Usage: python hash.py {enc | dec} password"
+    usage()
 
