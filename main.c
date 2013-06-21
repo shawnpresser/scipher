@@ -35,21 +35,59 @@
 #include "readpass.h"
 #include "scryptenc.h"
 #include "warn.h"
+#include "b64.h"
 
 static void
 usage(void)
 {
 
 	fprintf(stderr,
-	    "usage: scrypt {enc | dec} [...] infile [outfile]\n");
+	    "usage: scipher {enc | dec} [...] passwordfile [outfile]\n");
 	exit(1);
+}
+
+static char*
+grow_buffer( char* src, size_t srclen, size_t newsize )
+{
+  char* grow = calloc( 1, newsize+1 );
+  if ( srclen > newsize )
+    srclen = newsize;
+  memcpy( grow, src, srclen );
+  free( src );
+  return grow;
+}
+
+static char*
+read_entire_file( FILE* fp, size_t* out_size )
+{
+  size_t size = 0;
+  size_t max = 1024;
+  char* buffer = calloc( 1, max );
+  *out_size = 0;
+
+  if ( fp != stdin || !isatty( fileno( stdin ) ) )
+  {
+    while ( fread( &buffer[size], 1, 1, fp ) )
+    {
+      ++size;
+      if ( size >= max )
+      {
+        buffer = grow_buffer( buffer, max, 2*max );
+        max *= 2;
+      }
+    }
+  }
+
+  *out_size = size;
+  return grow_buffer( buffer, max, size );
 }
 
 int
 main(int argc, char *argv[])
 {
-	FILE * infile = NULL;
+	FILE * infile = stdin;
 	FILE * outfile = stdout;
+  FILE * pwfile = NULL;
 	int dec = 0;
 	size_t maxmem = 0;
 	double maxmemfrac = 0.5;
@@ -57,9 +95,12 @@ main(int argc, char *argv[])
 	char ch;
 	char * passwd;
 	int rc;
+  uint8_t* input = NULL;
+  size_t inputlen = 0;
+  size_t passwdlen = 0;
 
 #ifdef NEED_WARN_PROGNAME
-	warn_progname = "scrypt";
+	warn_progname = "scipher";
 #endif
 
 	/* We should have "enc" or "dec" first. */
@@ -68,7 +109,7 @@ main(int argc, char *argv[])
 	if (strcmp(argv[1], "enc") == 0) {
 		maxmem = 0;
 		maxmemfrac = 0.125;
-		maxtime = 5.0;
+		maxtime = 1.0;
 	} else if (strcmp(argv[1], "dec") == 0) {
 		dec = 1;
 	} else
@@ -99,11 +140,13 @@ main(int argc, char *argv[])
 	if ((argc < 1) || (argc > 2))
 		usage();
 
-	/* Open the input file. */
-	if ((infile = fopen(argv[0], "r")) == NULL) {
-		warn("Cannot open input file: %s", argv[0]);
-		exit(1);
-	}
+	/* Open the password file. */
+  if ((pwfile = fopen(argv[0], "r")) == NULL) {
+    warn("Cannot open input file: %s", argv[0]);
+    exit(1);
+  }
+  input = read_entire_file( infile, &inputlen );
+  passwd = read_entire_file( pwfile, &passwdlen );
 
 	/* If we have an output file, open it. */
 	if (argc > 1) {
@@ -114,17 +157,52 @@ main(int argc, char *argv[])
 	}
 
 	/* Prompt for a password. */
+  /*
 	if (tarsnap_readpass(&passwd, "Please enter passphrase",
 	    dec ? NULL : "Please confirm passphrase", 1))
 		exit(1);
+    */
 
 	/* Encrypt or decrypt. */
 	if (dec)
-		rc = scryptdec_file(infile, outfile, (uint8_t *)passwd,
-		    strlen(passwd), maxmem, maxmemfrac, maxtime);
+  {
+    /* Base64 decode. */
+    size_t inlen = 0;
+    uint8_t* in = calloc( 1, inputlen );
+    inlen = b64_decode( (const char*)input, inputlen, in );
+    {
+      size_t outputlen = inlen;
+      uint8_t* output = calloc( 1, outputlen );
+      rc = scryptdec_buf( in, inlen,
+          output, &outputlen,
+          passwd, strlen(passwd),
+          maxmem, maxmemfrac, maxtime );
+      fwrite( output, outputlen, 1, outfile );
+      free( output );
+    }
+    free( in );
+  }
 	else
-		rc = scryptenc_file(infile, outfile, (uint8_t *)passwd,
-		    strlen(passwd), maxmem, maxmemfrac, maxtime);
+  {
+    size_t outputlen = inputlen + 128;
+    uint8_t* output = calloc( 1, outputlen );
+    rc = scryptenc_buf( (const uint8_t*)input, inputlen,
+        output,
+        passwd, strlen(passwd),
+        maxmem, maxmemfrac, maxtime );
+    /* Base64 encode. */
+    {
+      size_t outlen = 0;
+      uint8_t* out = calloc( 1, 8*outputlen );
+      outlen = b64_encode( (const char*)output, outputlen, out );
+
+      fwrite( out, outlen, 1, outfile );
+      /*fwrite( "\n", 1, 1, outfile );*/
+
+      free( output );
+      free( out );
+    }
+  }
 
 	/* Zero and free the password. */
 	memset(passwd, 0, strlen(passwd));
