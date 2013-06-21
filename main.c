@@ -42,7 +42,7 @@ usage(void)
 {
 
 	fprintf(stderr,
-	    "usage: scipher {enc | dec} [...] passwordfile [outfile]\n");
+	    "usage: scipher {enc | dec} [...] infile [outfile]\n");
 	exit(1);
 }
 
@@ -85,9 +85,9 @@ read_entire_file( FILE* fp, size_t* out_size )
 int
 main(int argc, char *argv[])
 {
-	FILE * infile = stdin;
+	FILE * infile = NULL;
 	FILE * outfile = stdout;
-  FILE * pwfile = NULL;
+  FILE * pwfile = stdin;
 	int dec = 0;
 	size_t maxmem = 0;
 	double maxmemfrac = 0.5;
@@ -136,16 +136,22 @@ main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;
 
-	/* We must have one or two parameters left. */
-	if ((argc < 1) || (argc > 2))
+	if (argc > 2)
 		usage();
+  if (dec && argc < 1)
+    usage();
 
-	/* Open the password file. */
-  if ((pwfile = fopen(argv[0], "r")) == NULL) {
-    warn("Cannot open input file: %s", argv[0]);
-    exit(1);
+	/* Open the input file. */
+  if (argc > 0) {
+    if ((infile = fopen(argv[0], "r")) == NULL) {
+      warn("Cannot open input file: %s", argv[0]);
+      exit(1);
+    }
+    input = read_entire_file( infile, &inputlen );
+  } else {
+    input = calloc(1, 1);
+    inputlen = 0;
   }
-  input = read_entire_file( infile, &inputlen );
   passwd = read_entire_file( pwfile, &passwdlen );
 
 	/* If we have an output file, open it. */
@@ -164,8 +170,7 @@ main(int argc, char *argv[])
     */
 
 	/* Encrypt or decrypt. */
-	if (dec)
-  {
+	if (dec) {
     /* Base64 decode. */
     size_t inlen = 0;
     uint8_t* in = calloc( 1, inputlen );
@@ -181,9 +186,7 @@ main(int argc, char *argv[])
       free( output );
     }
     free( in );
-  }
-	else
-  {
+  } else {
     size_t outputlen = inputlen + 128;
     uint8_t* output = calloc( 1, outputlen );
     rc = scryptenc_buf( (const uint8_t*)input, inputlen,
