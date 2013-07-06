@@ -3,29 +3,26 @@ require 'tempfile'
 include Open3
 
 def usage()
-  puts "                                                              "
-  puts "  ruby scipher.rb enc [infile]                                "
-  puts "                                                              "
-  puts "    examples:                                                 "
-  puts "                                                              "
-  puts "    encrypt (hash) a password:                                "
-  puts "    $ printf 'somepassword' > pwfile;                         "
-  puts "    $ cat pwfile | ruby scipher.rb enc > hashfile             "
-  puts "                                                              "
-  puts "    decrypt (test) a password:                                "
-  puts "    $ printf 'somepassword' > pwfile;                         "
-  puts "    $ cat pwfile | ruby scipher.rb dec hashfile               "
-  puts "                                                              "
-  puts "    (if no output, then the password was correct)             "
-  puts "                                                              "
-  puts "    encrypt a file with a passphrase:                         "
-  puts "    $ printf 'somepassword' > pwfile;                         "
-  puts "    $ cat pwfile | ruby scipher.rb enc photo.jpg > photo.enc  "
-  puts "                                                              "
-  puts "    decrypt an encrypted file:                                "
-  puts "    $ printf 'somepassword' > pwfile;                         "
-  puts "    $ cat pwfile | ruby scipher.rb dec photo.enc > photo.jpg  "
-  puts "                                                              "
+  puts "                                                                "
+  puts "  ruby scipher.rb enc [infile]                                  "
+  puts "                                                                "
+  puts "examples:                                                       "
+  puts "                                                                "
+  puts "  encrypt (hash) a password:                                    "
+  puts "  $ printf 'goodpass' | ruby scipher.rb enc > hashfile          "
+  puts "                                                                "
+  puts "  check whether a given password matches the hash:              "
+  puts "  $ printf 'badpass' | ruby scipher.rb dec hashfile             "
+  puts "  $ printf 'goodpass' | ruby scipher.rb dec hashfile            "
+  puts "                                                                "
+  puts "  (the password is correct if scipher writes nothing to stderr.)"
+  puts "                                                                "
+  puts "  encrypt a file with a passphrase:                             "
+  puts "  $ printf 'mypass' | ruby scipher.rb enc photo.jpg > photo.enc "
+  puts "                                                                "
+  puts "  decrypt an encrypted file:                                    "
+  puts "  $ printf 'mypass' | ruby scipher.rb dec photo.enc > photo.jpg "
+  puts "                                                                "
   exit 1
 end
 
@@ -52,6 +49,7 @@ else
   usage
 end
 
+# if the exit code was 0, then the password was correct.
 if s.success?
   STDOUT.binmode; print o
 else
